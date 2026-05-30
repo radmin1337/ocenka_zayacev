@@ -8,9 +8,16 @@ WEBHOOK_URL = "https://discord.com/api/webhooks/1510044943584989328/QRtN_M5kWPZk
 
 IMAGES_FOLDER = "images"
 
+
 @app.route("/images/<path:filename>")
 def images(filename):
     return send_from_directory(IMAGES_FOLDER, filename)
+
+
+@app.route("/static/<path:filename>")
+def static_files(filename):
+    return send_from_directory("static", filename)
+
 
 @app.route("/")
 def index():
@@ -22,7 +29,10 @@ def index():
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Оценка Зайцев</title>
+<title>Оценка Заяцев</title>
+
+<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+
 <style>
 body {
     margin:0;
@@ -31,21 +41,32 @@ body {
     font-family:Arial;
     text-align:center;
 }
+
 .container {
     margin-top:50px;
 }
+
 img {
     max-height:400px;
     border-radius:10px;
+    opacity:0;
+    transition:opacity 0.4s ease;
 }
+
+img.loaded {
+    opacity:1;
+}
+
 .stars {
     font-size:40px;
     cursor:pointer;
     color:gray;
 }
+
 .star.active {
     color:gold;
 }
+
 button {
     margin-top:20px;
     padding:10px 20px;
@@ -56,12 +77,46 @@ button {
     border-radius:5px;
     cursor:pointer;
 }
+
 button:hover {
     background:#333;
 }
+
+/* Экран загрузки */
+.loader {
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:#111;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:999;
+}
+
+.spinner {
+    border:6px solid #333;
+    border-top:6px solid gold;
+    border-radius:50%;
+    width:60px;
+    height:60px;
+    animation:spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform:rotate(0deg); }
+    100% { transform:rotate(360deg); }
+}
 </style>
 </head>
+
 <body>
+
+<div class="loader" id="loader">
+    <div class="spinner"></div>
+</div>
 
 <div class="container">
     <img id="image"><br>
@@ -83,15 +138,29 @@ function loadImage() {
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify(ratings)
         }).then(()=> {
-            document.body.innerHTML = "<h1>Спасибо за оценку 🐰</h1>";
+            document.body.innerHTML = "<h1>Спасибо за оценку!</h1>";
         });
         return;
     }
 
     selectedRating = 0;
-    document.getElementById("image").src = "/images/" + images[current];
+
+    let loader = document.getElementById("loader");
+    loader.style.display = "flex";
+
+    let img = document.getElementById("image");
+    img.classList.remove("loaded");
+
+    img.onload = function() {
+        loader.style.display = "none";
+        img.classList.add("loaded");
+    };
+
+    img.src = "/images/" + images[current];
+
     document.getElementById("title").innerText =
         images[current].split(".").slice(0,-1).join(".");
+
     renderStars();
 }
 
@@ -121,7 +190,7 @@ function nextImage() {
     loadImage();
 }
 
-loadImage();
+window.onload = loadImage;
 </script>
 
 </body>
@@ -135,11 +204,12 @@ def submit():
     ip = request.remote_addr
     user_agent = request.headers.get("User-Agent")
 
-    message = "Новые оценки изображений\n"
+    message = "Новые оценки изображений\n\n"
+
     for name, rating in data.items():
         message += f"{name} — {rating} ⭐\n"
 
-    message += f"\nIP\n{ip}\nBrowser\n{user_agent}"
+    message += f"\nIP:\n{ip}\n\nBrowser:\n{user_agent}"
 
     requests.post(WEBHOOK_URL, json={"content": message})
     return jsonify({"status": "ok"})
