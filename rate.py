@@ -5,7 +5,7 @@ from PIL import Image
 
 app = Flask(__name__)
 
-WEBHOOK_URL = "ТВОЙ_WEBHOOK_СЮДА"
+WEBHOOK_URL = "https://discord.com/api/webhooks/1510044943584989328/QRtN_M5kWPZkvrVuSMFTM1HoXNebOcqgdeO3M6suT0iBhW7IedwgB6QFLtUAAMtoxzJ7"
 
 IMAGES_FOLDER = "images"
 THUMB_FOLDER = "thumbnails"
@@ -14,7 +14,7 @@ MAX_SIZE = (1000, 1000)
 os.makedirs(THUMB_FOLDER, exist_ok=True)
 
 def generate_thumbnails():
-    print("Генерация уменьшенных изображений...")
+    print("Генерация изображений...")
     for filename in os.listdir(IMAGES_FOLDER):
         if filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif")):
             original_path = os.path.join(IMAGES_FOLDER, filename)
@@ -33,26 +33,26 @@ def generate_thumbnails():
 
 @app.route("/images/<path:filename>")
 def images(filename):
-    return send_from_directory(
-        THUMB_FOLDER,
-        filename,
-        max_age=86400  # кеш 1 день
-    )
+    return send_from_directory(THUMB_FOLDER, filename, max_age=86400)
 
 
 @app.route("/")
 def index():
+
     files = [
-        f for f in os.listdir(THUMB_FOLDER)
+        f for f in os.listdir(IMAGES_FOLDER)
         if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))
     ]
+
+    if not files:
+        return "<h1 style='color:white;background:#111;text-align:center;padding:50px;'>Нет изображений</h1>"
 
     return render_template_string("""
 <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Оценка Заяцев</title>
+<title>Оценка</title>
 
 <style>
 body {
@@ -65,7 +65,6 @@ body {
     height:100vh;
 }
 
-/* Контейнер картинки */
 .image-container {
     flex:1;
     display:flex;
@@ -80,14 +79,12 @@ img {
     max-height:70vh;
     object-fit:contain;
     border-radius:10px;
-    transition:opacity 0.2s ease;
 }
 
 h2 {
     margin-top:20px;
 }
 
-/* Панель оценки */
 .panel {
     padding:20px;
     background:#000;
@@ -115,10 +112,6 @@ button {
     border-radius:5px;
     cursor:pointer;
 }
-
-button:hover {
-    background:#333;
-}
 </style>
 </head>
 
@@ -140,7 +133,6 @@ let current = 0;
 let ratings = {};
 let selectedRating = 0;
 
-// Предзагрузка следующей картинки
 function preloadNext() {
     if (current + 1 < images.length) {
         let img = new Image();
@@ -149,24 +141,12 @@ function preloadNext() {
 }
 
 function loadImage() {
-    if (current >= images.length) {
-        fetch("/submit", {
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify(ratings)
-        }).then(()=> {
-            document.body.innerHTML = "<h1 style='margin:auto'>Спасибо за оценку!</h1>";
-        });
-        return;
-    }
 
     selectedRating = 0;
 
     let img = document.getElementById("image");
-    img.style.opacity = 0;
 
     img.onload = function() {
-        img.style.opacity = 1;
         preloadNext();
     };
 
@@ -199,8 +179,21 @@ function nextImage() {
         alert("Поставь оценку!");
         return;
     }
+
     ratings[images[current]] = selectedRating;
     current++;
+
+    if (current >= images.length) {
+        fetch("/submit", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify(ratings)
+        }).then(()=> {
+            document.body.innerHTML = "<h1 style='margin:auto'>Спасибо за оценку!</h1>";
+        });
+        return;
+    }
+
     loadImage();
 }
 
@@ -218,7 +211,7 @@ def submit():
     ip = request.remote_addr
     user_agent = request.headers.get("User-Agent")
 
-    message = "Новые оценки изображений\\n\\n"
+    message = "Новые оценки\\n\\n"
 
     for name, rating in data.items():
         message += f"{name} — {rating} ⭐\\n"
