@@ -5,42 +5,45 @@ from PIL import Image
 
 app = Flask(__name__)
 
-WEBHOOK_URL = "https://discord.com/api/webhooks/1510044943584989328/QRtN_M5kWPZkvrVuSMFTM1HoXNebOcqgdeO3M6suT0iBhW7IedwgB6QFLtUAAMtoxzJ7"
+WEBHOOK_URL = "ТВОЙ_WEBHOOK_СЮДА"
 
 IMAGES_FOLDER = "images"
 THUMB_FOLDER = "thumbnails"
-MAX_SIZE = (1200, 1200)
+MAX_SIZE = (1000, 1000)
 
 os.makedirs(THUMB_FOLDER, exist_ok=True)
 
+def generate_thumbnails():
+    print("Генерация уменьшенных изображений...")
+    for filename in os.listdir(IMAGES_FOLDER):
+        if filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif")):
+            original_path = os.path.join(IMAGES_FOLDER, filename)
+            thumb_path = os.path.join(THUMB_FOLDER, filename)
+
+            if not os.path.exists(thumb_path):
+                try:
+                    with Image.open(original_path) as img:
+                        img.thumbnail(MAX_SIZE)
+                        img.save(thumb_path, optimize=True, quality=80)
+                        print("Создано:", filename)
+                except Exception as e:
+                    print("Ошибка:", filename, e)
+    print("Готово ✅")
+
+
 @app.route("/images/<path:filename>")
 def images(filename):
-    original_path = os.path.join(IMAGES_FOLDER, filename)
-    thumb_path = os.path.join(THUMB_FOLDER, filename)
-
-    if not os.path.exists(original_path):
-        return "Файл не найден", 404
-
-    if not os.path.exists(thumb_path):
-        try:
-            with Image.open(original_path) as img:
-                img.thumbnail(MAX_SIZE)
-                img.save(thumb_path, optimize=True, quality=85)
-        except Exception as e:
-            return f"Ошибка обработки изображения: {e}", 500
-
-    return send_from_directory(THUMB_FOLDER, filename)
-
-
-@app.route("/static/<path:filename>")
-def static_files(filename):
-    return send_from_directory("static", filename)
+    return send_from_directory(
+        THUMB_FOLDER,
+        filename,
+        max_age=86400  # кеш 1 день
+    )
 
 
 @app.route("/")
 def index():
     files = [
-        f for f in os.listdir(IMAGES_FOLDER)
+        f for f in os.listdir(THUMB_FOLDER)
         if f.lower().endswith((".png", ".jpg", ".jpeg", ".gif"))
     ]
 
@@ -50,7 +53,6 @@ def index():
 <head>
 <meta charset="UTF-8">
 <title>Оценка Заяцев</title>
-<link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 
 <style>
 body {
@@ -70,7 +72,6 @@ body {
     flex-direction:column;
     align-items:center;
     justify-content:center;
-    overflow:hidden;
     padding:20px;
 }
 
@@ -79,12 +80,7 @@ img {
     max-height:70vh;
     object-fit:contain;
     border-radius:10px;
-    opacity:0;
-    transition:opacity 0.4s ease;
-}
-
-img.loaded {
-    opacity:1;
+    transition:opacity 0.2s ease;
 }
 
 h2 {
@@ -123,42 +119,10 @@ button {
 button:hover {
     background:#333;
 }
-
-/* Лоадер */
-.loader {
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:#111;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    z-index:999;
-}
-
-.spinner {
-    border:6px solid #333;
-    border-top:6px solid gold;
-    border-radius:50%;
-    width:60px;
-    height:60px;
-    animation:spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform:rotate(0deg); }
-    100% { transform:rotate(360deg); }
-}
 </style>
 </head>
 
 <body>
-
-<div class="loader" id="loader">
-    <div class="spinner"></div>
-</div>
 
 <div class="image-container">
     <img id="image">
@@ -176,6 +140,14 @@ let current = 0;
 let ratings = {};
 let selectedRating = 0;
 
+// Предзагрузка следующей картинки
+function preloadNext() {
+    if (current + 1 < images.length) {
+        let img = new Image();
+        img.src = "/images/" + images[current + 1];
+    }
+}
+
 function loadImage() {
     if (current >= images.length) {
         fetch("/submit", {
@@ -190,15 +162,12 @@ function loadImage() {
 
     selectedRating = 0;
 
-    let loader = document.getElementById("loader");
-    loader.style.display = "flex";
-
     let img = document.getElementById("image");
-    img.classList.remove("loaded");
+    img.style.opacity = 0;
 
     img.onload = function() {
-        loader.style.display = "none";
-        img.classList.add("loaded");
+        img.style.opacity = 1;
+        preloadNext();
     };
 
     img.src = "/images/" + images[current];
@@ -261,4 +230,5 @@ def submit():
 
 
 if __name__ == "__main__":
+    generate_thumbnails()
     app.run(host="0.0.0.0", port=10000)
